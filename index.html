@@ -456,7 +456,7 @@ const C = {
   startCash: 500000,
   startHp: 100,
   wage: 10320,
-  nightMul: 1.5,
+  nightMul: 2,
   juhyuMinHours: 15,
   living: 180000,            // 주간 생활비 (1학년)
   livingPerYear: 10000,      // 학년마다 주간 생활비 +1만
@@ -470,7 +470,7 @@ const C = {
   scholarship: [[4.0, 1.0, '전액'], [3.5, 0.5, '반액']],
   warnGpa: 1.75, warnLimit: 2,
   skillCarry: 0.25,          // 다음 학기로 넘어가는 실력
-  hp: { sleep: 0.5, sleepCapDaily: 9, rest: 0.3, cls: 0.35, study: 0.8, day: 0.8, night: 1.1, variance: 0.1 },
+  hp: { sleep: 0.5, sleepCapDaily: 9, rest: 0.3, cls: 0.35, study: 0.8, day: 0.8, night: 1.5, variance: 0.1 },
   fatigue: { under: 6, perHour: 5, recoverAt: 7, recover: 5, max: 40 },
   effTiers: [[60, 1.0], [30, 0.8], [-Infinity, 0.6]],
   lowSleepDaily: 5, lowSleepMul: 0.8,
@@ -1120,7 +1120,7 @@ function renderBill() {
     : `학자금 대출 한도 ${won(s.loanCap)} (${Math.round(C.loanCapRate[k] * 100)}%)`;
   const rules = first ? `<ul class="rules">
       <li>매주 <b>하루 수면 시간</b>을 정하고 남은 시간을 <b>공부 · 알바 · 휴식</b>에 나눠요.</li>
-      <li>알바는 <b>시급 10,320원</b>. 야간은 1.5배, 주 15시간 넘으면 <b>주휴수당</b>도 나와요.</li>
+      <li>알바는 <b>시급 10,320원</b>. 야간은 <b>${C.nightMul}배</b>지만 체력이 훨씬 많이 들어요. 주 15시간 넘으면 <b>주휴수당</b>도 나와요.</li>
       <li>매주 생활비 <b>${man(C.living)} 원</b>, 4주마다 <b>월세</b>(집에 따라 다름). 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
       <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요. 잠으로 회복되는 건 하루 <b>${C.hp.sleepCapDaily}시간</b>까지예요.</li>
       <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
