@@ -922,13 +922,14 @@ function renderTuition() {
     s._loanDraft = loan;
     $('tu-loan').textContent = won(loan);
     $('tu-own').textContent = won(own);
-    $('tu-own').style.color = own > s.cash ? 'var(--red)' : '';
-    $('tu-pay').disabled = own > s.cash;
+    const short = own > 0 && own > s.cash;
+    $('tu-own').style.color = short ? 'var(--red)' : '';
+    $('tu-pay').disabled = short;
   };
   rg.addEventListener('input', upd);
   $('tu-pay').addEventListener('click', () => {
     const loan = +rg.value, own = s.tuitionDue - loan;
-    if (own > s.cash) return;
+    if (own > 0 && own > s.cash) return;
     s.loanThis = loan; s.debt += loan; s.cash -= own; s.tuitionPaid = true; delete s._loanDraft;
     save(); renderPlanner();
   });
