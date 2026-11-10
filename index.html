@@ -129,6 +129,29 @@ button { font-family: inherit; color: inherit; }
 .cover .btns { display: flex; flex-direction: column; gap: 12px; align-items: center; position: relative; z-index: 1; }
 .cover .btn { min-width: 200px; background: #fdf8ea; color: #22314a; border-color: #11192a; box-shadow: 3px 3px 0 #11192a; }
 .cover .note { margin-top: 22px; font-size: 13px; opacity: .7; }
+.cover .diff { position: relative; z-index: 1; margin: 0 0 18px; }
+.cover .diff-label { font-size: 13px; opacity: .75; margin-bottom: 8px; }
+.cover .diff-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.cover .diff-row button {
+  font: inherit; font-size: 15px; padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  background: transparent; color: #fdf8ea; border: 2px solid rgba(253,248,234,.55);
+}
+.cover .diff-row button[aria-checked="true"] { background: #ffe98a; color: #4a3f12; border-color: #ffe98a; font-weight: 700; }
+.cover .diff-desc { font-size: 13px; opacity: .8; margin-top: 8px; min-height: 2.6em; }
+.houses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 18px; }
+.house {
+  font: inherit; text-align: left; cursor: pointer; padding: 12px; border-radius: 8px; color: var(--ink);
+  background: var(--paper); border: 2px dashed var(--ink-faint); display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.house[aria-checked="true"] { border: 2px solid var(--pen); background: var(--paper-2); box-shadow: 3px 3px 0 var(--pen); }
+.house .hn { font-family: 'Gaegu', cursive; font-size: 22px; font-weight: 700; line-height: 1; }
+.house .hr { font-weight: 700; font-variant-numeric: tabular-nums; }
+.house .hd { font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+.house .hs { font-size: 12px; line-height: 1.5; }
+.house .hs .up { color: var(--good); } .house .hs .dn { color: var(--red); }
+.house-title { font-size: 14px; color: var(--ink-soft); margin-top: 4px; }
+.house-title b { color: var(--ink); }
+@media (max-width: 560px) { .houses { grid-template-columns: 1fr; } }
 
 /* prologue */
 .prologue { max-width: 640px; margin: 4vh auto 0; padding: 36px 36px 30px; }
@@ -330,6 +353,11 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
       <div class="sticker hand">2027학번 새내기</div>
       <h1>한 학기 버티기</h1>
       <p>매주 168시간을 쪼개서 4년 8학기를 버텨라</p>
+      <div class="diff">
+        <div class="diff-label">난이도</div>
+        <div class="diff-row" id="diff-row" role="radiogroup" aria-label="난이도"></div>
+        <div class="diff-desc" id="diff-desc"></div>
+      </div>
       <div class="btns">
         <button class="btn" id="btn-new">새로 시작하기</button>
         <button class="btn" id="btn-continue" style="display:none">이어하기</button>
@@ -496,10 +524,46 @@ const vacName = k => (k % 2 === 0 ? '겨울방학' : '여름방학');
 const weekLabel = (k, w) => isSem(w) ? `${semName(k)} ${w - C.semesterStart + 1}주차` : `${vacName(k)} ${w}주차`;
 const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 
+/* ========================================================= difficulty & housing */
+const DIFFS = {
+  easy:   { name: '쉬움',   desc: '체력 소모가 적고 생활비가 싸요. 성적도 잘 나오고, 학사경고는 3번까지 버텨요.',
+            drain: 0.93, living: 170000, rentMul: 0.9, startCash: 700000, bandMul: 0.9, warnLimit: 3, loanMinGpa: 2.0, eventChance: 0.45, tempt: 0.6, bad: 0.7 },
+  normal: { name: '보통',   desc: '기본 난이도. 꾸준히 공부하고 체력을 지키면 4.0도 나와요.',
+            drain: 1, living: 180000, rentMul: 1, startCash: 500000, bandMul: 1, warnLimit: 2, loanMinGpa: 2.0, eventChance: 0.5, tempt: 1, bad: 1 },
+  hard:   { name: '어려움', desc: '체력 소모·월세·생활비가 다 비싸고 나쁜 일이 자주 생겨요. 평점 2.5 미만이면 대출도 막혀요.',
+            drain: 1.07, living: 190000, rentMul: 1.1, startCash: 500000, bandMul: 1.08, warnLimit: 2, loanMinGpa: 2.5, eventChance: 0.55, tempt: 1, bad: 1.3 }
+};
+const HOUSES = {
+  goshi:   { name: '고시원', rent: 350000, sleep: 0.93, rest: 0.85, study: 0.95,  desc: '벽이 얇고 방이 좁다. 싸지만 잠이 얕고 집에선 집중이 안 된다.' },
+  oneroom: { name: '원룸',   rent: 600000, sleep: 1,    rest: 1,   study: 1,    desc: '평범한 자취방. 침대 옆이 곧 책상이다.' },
+  tworoom: { name: '투룸',   rent: 850000, sleep: 1.07, rest: 1.2, study: 1.05, desc: '방 하나는 침실, 하나는 공부방. 푹 자고 푹 쉰다.' }
+};
+const HOUSE_KEYS = ['goshi', 'oneroom', 'tworoom'];
+const TEMPT_IDS = ['game', 'youtube', 'netflix', 'drink', 'delivery', 'oversleep'];
+const BAD_IDS = ['rentup', 'price', 'shiftcut', 'closed', 'food', 'family', 'phone', 'cold', 'laptop', 'wallet', 'freerider'];
+const BASE_C = structuredClone(C);
+function applyDiff(key) {
+  const d = DIFFS[key] || DIFFS.normal;
+  const b = structuredClone(BASE_C);
+  Object.keys(b).forEach(k => { C[k] = b[k]; });
+  ['cls', 'study', 'day', 'night'].forEach(k => { C.hp[k] = Math.round(C.hp[k] * d.drain * 1000) / 1000; });
+  C.living = d.living; C.rentMul = d.rentMul; C.startCash = d.startCash;
+  C.bands = C.bands.map(x => [isFinite(x[0]) ? Math.round(x[0] * d.bandMul) : x[0], x[1], x[2]]);
+  C.warnLimit = d.warnLimit; C.loanMinGpa = d.loanMinGpa; C.eventChance = d.eventChance;
+  C.temptWeight = d.tempt; C.badWeight = d.bad;
+  C.diff = DIFFS[key] ? key : 'normal';
+}
+C.moveFee = 300000;
+BASE_C.moveFee = 300000;
+const diffName = () => DIFFS[C.diff || 'normal'].name;
+const houseOf = s => HOUSES[s.house] || HOUSES.oneroom;
+const houseRent = (key) => Math.round(HOUSES[key].rent * (C.rentMul || 1) / 10000) * 10000;
+
 /* ========================================================= state */
 let S = null;
-function newState() {
+function newState(diff = 'normal') {
   return {
+    diff, house: 'oneroom',
     sem: 0, week: 1, cash: C.startCash, hp: C.startHp, fatigue: 0, skill: 0, debt: 0,
     tuition: 0, tuitionDue: 0, tuitionPaid: false, loanCap: 0, loanBlocked: false, scholarRate: 0, loanThis: 0,
     warnings: 0, overdue: 0, hospital: 0,
@@ -513,7 +577,7 @@ function newState() {
   };
 }
 const livingCost = s => C.living + C.livingPerYear * Math.floor(s.sem / 2) + s.livingExtra;
-const rentCost = s => C.rent + s.rentExtra;
+const rentCost = s => houseRent(s.house in HOUSES ? s.house : 'oneroom') + s.rentExtra;
 const maxHp = s => 100 - s.fatigue;
 
 function startSemester(s, k) {
@@ -647,7 +711,9 @@ function rollEvent(s) {
   if (Math.random() >= C.eventChance) return null;
   const pool = EVENTS.filter(e => !s.used.includes(e.id) && !s.usedForever.includes(e.id) && e.when(s));
   if (!pool.length) return null;
-  const e = pick(pool);
+  const w = e => TEMPT_IDS.includes(e.id) ? (C.temptWeight ?? 1) : BAD_IDS.includes(e.id) ? (C.badWeight ?? 1) : 1;
+  let t = Math.random() * pool.reduce((a, e) => a + w(e), 0), e = pool[pool.length - 1];
+  for (const x of pool) { t -= w(x); if (t <= 0) { e = x; break; } }
   s.used.push(e.id);
   if (e.once) s.usedForever.push(e.id);
   return e;
@@ -670,10 +736,11 @@ function compute(s, plan, m, drainMul) {
   let rest = 168 - sleep - cls - day - night - study;
   if (rest < 0) { sleep = Math.max(0, sleep + rest); rest = 0; }
   const H = C.hp;
-  const recover = H.sleep * Math.min(sleep, H.sleepCapDaily * 7) + H.rest * rest;
+  const hs = houseOf(s);
+  const recover = H.sleep * hs.sleep * Math.min(sleep, H.sleepCapDaily * 7) + H.rest * hs.rest * rest;
   const drain = (H.study * study + H.day * day + H.night * night + H.cls * cls) * drainMul;
   const hpEnd = Math.min(maxHp(s), s.hp + recover - drain + m.hp);
-  let eff = effTier(s.hp) * s.cur.effMul * m.effMul;
+  let eff = effTier(s.hp) * s.cur.effMul * m.effMul * hs.study;
   if (sleep / 7 < C.lowSleepDaily) eff *= C.lowSleepMul;
   if (C.examWeeks.includes(s.week)) eff *= C.examMul;
   if (s.laptopWeeks > 0 && !m._laptopApplied) eff *= 0.8;
@@ -803,6 +870,7 @@ function renderPlanner() {
 
   const chips = [];
   chips.push(['', `${s.sem + 1}/${C.semesters}학기`]);
+  chips.push(['', `${diffName()} · ${houseOf(s).name}`]);
   const nextRent = C.rentWeeks.find(w => w >= s.week);
   if (nextRent === s.week) chips.push(['warn', `이번 주 월세 −${man(rentCost(s))}`]);
   else if (nextRent) chips.push(['info', `다음 월세 W${nextRent}`]);
@@ -1042,7 +1110,7 @@ function renderBill() {
   const s = S, k = s.sem, first = k === 0;
   s.screen = 'bill';
   const lines = first
-    ? `자취방 월세는 4주마다 60만 원.<br>통장엔 ${man(s.cash)} 원뿐인데, 오늘 학비 고지서가 날아왔다.`
+    ? `자취방부터 구해야 한다. 월세는 4주마다 나간다.<br>통장엔 ${man(s.cash)} 원뿐인데, 오늘 학비 고지서가 날아왔다.`
     : `${vacName(k)}이 시작됐다. 통장엔 ${man(s.cash)} 원.<br>${semName(k)} 고지서가 또 날아왔다.`;
   const schol = s.scholarRate ? `<div style="color:var(--good);font-weight:700">성적장학금 ${s.scholarRate === 1 ? '전액' : '반액'} 적용! (원래 ${won(s.tuition)})</div>` : '';
   const loanLine = s.loanBlocked ? '<span style="color:var(--red)">직전 학기 평점 미달 · 이번 학기 대출 불가</span>'
@@ -1050,10 +1118,10 @@ function renderBill() {
   const rules = first ? `<ul class="rules">
       <li>매주 <b>하루 수면 시간</b>을 정하고 남은 시간을 <b>공부 · 알바 · 휴식</b>에 나눠요.</li>
       <li>알바는 <b>시급 10,320원</b>. 야간은 1.5배, 주 15시간 넘으면 <b>주휴수당</b>도 나와요.</li>
-      <li>매주 생활비 <b>18만 원</b>, 4주마다 월세 <b>60만 원</b>. 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
+      <li>매주 생활비 <b>${man(C.living)} 원</b>, 4주마다 <b>월세</b>(집에 따라 다름). 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
       <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요.</li>
-      <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>2.0 미만</b>이면 다음 학기 대출 불가.</li>
-      <li>평점 <b>1.75 미만</b>이면 학사경고, <b>2회</b>면 제적. 평점 <b>3.5 이상</b>이면 다음 학기 학비 반액, <b>4.0 이상</b>이면 전액 장학금.</li>
+      <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
+      <li>평점 <b>1.75 미만</b>이면 학사경고, <b>${C.warnLimit}회</b>면 제적. 평점 <b>3.5 이상</b>이면 다음 학기 학비 반액, <b>4.0 이상</b>이면 전액 장학금.</li>
     </ul>` : '';
   const hist = s.history.length ? `<div class="semhist">${s.history.map(h => `<span>${h.name} ${h.gpa.toFixed(2)}</span>`).join('')}</div>` : '';
   $('bill').innerHTML = `
@@ -1063,10 +1131,33 @@ function renderBill() {
       <div><div style="font-size:13px;color:var(--ink-soft)">${semName(k)} 등록금 고지서</div><div class="amt">${won(s.tuitionDue)}</div>${schol}</div>
       <div style="text-align:right;font-size:14px">납부 마감 <b style="color:var(--red)">W3 종료</b><br><span style="color:var(--ink-soft)">${loanLine}</span></div>
     </div>
+    <div class="house-title" id="house-title"></div>
+    <div class="houses" id="houses" role="radiogroup" aria-label="집 고르기"></div>
     ${hist}${rules}
     <div class="go"><button class="btn primary" id="btn-start">${vacName(k)} 시작 →</button></div>`;
+  let choice = s.house in HOUSES ? s.house : 'oneroom';
+  const pct = v => v === 1 ? '<span>보통</span>' : v > 1 ? `<span class="up">+${Math.round((v - 1) * 100)}%</span>` : `<span class="dn">−${Math.round((1 - v) * 100)}%</span>`;
+  const drawHouses = () => {
+    $('houses').innerHTML = HOUSE_KEYS.map(key => {
+      const h = HOUSES[key];
+      return `<button class="house" role="radio" aria-checked="${key === choice}" data-h="${key}">
+        <span class="hn">${h.name}</span><span class="hr">월세 ${man(houseRent(key))}</span>
+        <span class="hd">${h.desc}</span>
+        <span class="hs">수면 회복 ${pct(h.sleep)}<br>휴식 회복 ${pct(h.rest)}<br>공부 효율 ${pct(h.study)}</span></button>`;
+    }).join('');
+    const moving = !first && choice !== s.house;
+    $('house-title').innerHTML = first ? '<b>어디서 살까?</b> 집에 따라 월세와 회복량, 공부 효율이 달라요.'
+      : moving ? `<b>${HOUSES[s.house].name} → ${HOUSES[choice].name} 이사</b> · 이사비 ${man(C.moveFee)} 원이 바로 빠져요.`
+      : `<b>지금 사는 곳: ${HOUSES[s.house].name}</b> · 방학마다 이사할 수 있어요 (이사비 ${man(C.moveFee)} 원).`;
+    document.querySelectorAll('#houses .house').forEach(b => b.addEventListener('click', () => { choice = b.dataset.h; drawHouses(); }));
+  };
+  drawHouses();
   show('prologue');
-  $('btn-start').addEventListener('click', () => { renderPlanner(); save(); show('planner'); });
+  $('btn-start').addEventListener('click', () => {
+    if (!first && choice !== s.house) { s.cash -= C.moveFee; s.moved = (s.moved || 0) + 1; }
+    s.house = choice;
+    renderPlanner(); save(); show('planner');
+  });
 }
 
 /* ========================================================= grades, report & ending */
@@ -1079,7 +1170,7 @@ function renderGrades() {
   S.screen = 'grades';
   save();
   const gs = S.grades;
-  $('grades').innerHTML = `<h2>${semName(S.sem)} 성적표</h2><div style="color:var(--ink-soft);font-size:14px">최종 능력치 ${Math.round(S.skill)} · Lv.${lvOf(S.skill)}</div>
+  $('grades').innerHTML = `<h2>${semName(S.sem)} 성적표</h2><div style="color:var(--ink-soft);font-size:14px">최종 능력치 ${Math.round(S.skill)} · Lv.${lvOf(S.skill)} · 난이도 ${diffName()}</div>
     <table class="gtable">${gs.map((g, i) => `<tr><td>${g.name}</td><td>3학점</td><td><span class="gstamp">${g.g}</span></td></tr>`).join('')}</table>
     <div class="gpa"><span>평점 평균</span><span class="gstamp">${S.gpa.toFixed(2)} / 4.5</span></div>
     <div class="go"><button class="btn primary" id="btn-report" style="visibility:hidden">학기 결산 →</button></div>`;
@@ -1153,7 +1244,7 @@ function scoreOf() {
 
 const ENDINGS = {
   expelled: ['제적', '학비 납부 기한을 넘겼다. 학사 시스템에 \'제적\' 두 글자가 떴다.'],
-  academic: ['학사제적', '학사경고가 두 번 쌓였다. 학교에서 온 등기우편을 한참 동안 열지 못했다.'],
+  academic: ['학사제적', '학사경고가 쌓일 만큼 쌓였다. 학교에서 온 등기우편을 한참 동안 열지 못했다.'],
   broke: ['생활고로 휴학', '월세와 카드값이 겹겹이 밀렸다. 결국 휴학계를 냈다. 언젠가 꼭 다시 돌아오자.'],
   god: ['갓생 졸업', '성적도, 통장도, 건강도 챙겼다. 졸업식 날 학사모를 던지며 소리 질렀다.'],
   summa: ['수석 졸업', '졸업식에서 이름이 불렸다. 4년 동안의 도서관 창가 자리가 떠올랐다.'],
@@ -1182,10 +1273,10 @@ function renderEnding() {
   const t = S.totals;
   let h = '';
   if (over) {
-    h += `<div class="bigstamp">끝</div><div class="ending-title">GAME OVER · ${title}</div><p class="ending-text">${text}</p>`;
+    h += `<div class="bigstamp">끝</div><div class="ending-title">GAME OVER · ${title}</div><div class="center" style="color:var(--ink-soft);font-size:14px">난이도 ${diffName()}</div><p class="ending-text">${text}</p>`;
     h += `<div class="center" style="color:var(--ink-soft);font-size:14px">${semName(S.sem)} W${S.week}에서 멈췄어요. (${S.sem}/${C.semesters}학기 완료)</div>`;
   } else {
-    h += `<div class="bigstamp">${sc.rank}</div><div class="ending-title">${title}</div><p class="ending-text">${text}</p>`;
+    h += `<div class="bigstamp">${sc.rank}</div><div class="ending-title">${title}</div><div class="center" style="color:var(--ink-soft);font-size:14px">난이도 ${diffName()}</div><p class="ending-text">${text}</p>`;
     h += `<div class="scorebox">
       <div><b>${sc.a.toFixed(1)}<small style="font-size:12px;color:var(--ink-soft)">/60</small></b><span>학업 · 누적 평점 ${sc.gpa.toFixed(2)}</span></div>
       <div><b>${sc.f.toFixed(1)}<small style="font-size:12px;color:var(--ink-soft)">/25</small></b><span>재정 · 순자산 ${man(sc.net)}</span></div>
@@ -1208,13 +1299,26 @@ function renderEnding() {
   <div class="go" style="justify-content:center"><button class="btn primary" id="btn-again">다시 하기</button></div>`;
   $('ending').innerHTML = h;
   show('ending');
-  $('btn-again').addEventListener('click', startNew);
+  $('btn-again').addEventListener('click', () => { $('btn-continue').style.display = 'none'; show('cover'); });
 }
 
 /* ========================================================= boot */
+let pickedDiff = 'normal';
+try { const d = localStorage.getItem('semester-survival-diff'); if (DIFFS[d]) pickedDiff = d; } catch (e) {}
+function drawDiff() {
+  $('diff-row').innerHTML = Object.keys(DIFFS).map(k => `<button role="radio" aria-checked="${k === pickedDiff}" data-d="${k}">${DIFFS[k].name}</button>`).join('');
+  $('diff-desc').textContent = DIFFS[pickedDiff].desc;
+  document.querySelectorAll('#diff-row button').forEach(b => b.addEventListener('click', () => {
+    pickedDiff = b.dataset.d;
+    try { localStorage.setItem('semester-survival-diff', pickedDiff); } catch (e) {}
+    drawDiff();
+  }));
+}
+drawDiff();
 function startNew() {
   clearSave();
-  S = newState();
+  applyDiff(pickedDiff);
+  S = newState(pickedDiff);
   startSemester(S, 0);
   save();
   renderBill();
@@ -1222,6 +1326,8 @@ function startNew() {
 function resume() {
   S = load();
   if (!S) return startNew();
+  applyDiff(S.diff || 'normal');
+  if (!(S.house in HOUSES)) S.house = 'oneroom';
   if (S.over) { clearSave(); return renderEnding(); }
   const sc = S.screen;
   if (sc === 'bill') return renderBill();
