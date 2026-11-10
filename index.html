@@ -504,6 +504,7 @@ const C = {
   eventChance: 0.5,
   autoWeeks: 4,
   bands: [[440, 0, 1], [330, 1, 3], [220, 2, 4], [110, 3, 5], [-Infinity, 4, 7]], // Lv5 A+~A0 · Lv4 A0~B0 · Lv3 B+~C+ · Lv2 B0~C0 · Lv1 C+~D0
+  aPlus: { base: 0.5, max: 0.9, span: 0.3 }, // Lv5 A+ 확률: 문턱에서 50% → 문턱×1.3에서 90%
   grades: [['A+', 4.5], ['A0', 4.0], ['B+', 3.5], ['B0', 3.0], ['C+', 2.5], ['C0', 2.0], ['D+', 1.5], ['D0', 1.0]],
   subjects: [
     ['대학글쓰기', '경제학원론', '미적분학', '심리학개론', '프로그래밍기초', '교양영어'],
@@ -540,6 +541,13 @@ const pay = (day, night) => {
 const effTier = hp => C.effTiers.find(t => hp >= t[0])[1];
 const band = sk => C.bands.findIndex(b => sk >= b[0]);
 const lvOf = sk => 5 - band(sk);
+const aPlusTop = () => Math.round(C.bands[0][0] * (1 + C.aPlus.span));
+const aPlusChance = sk => {
+  const lo = C.bands[0][0];
+  if (sk < lo) return 0;
+  return C.aPlus.base + (C.aPlus.max - C.aPlus.base) * clamp((sk - lo) / (aPlusTop() - lo), 0, 1);
+};
+const lvText = sk => `Lv.${lvOf(sk)}` + (lvOf(sk) === 5 ? ` · A+ ${Math.round(aPlusChance(sk) * 100)}%` : '');
 const semName = k => `${Math.floor(k / 2) + 1}학년 ${k % 2 + 1}학기`;
 const vacName = k => (k % 2 === 0 ? '겨울방학' : '여름방학');
 const weekLabel = (k, w) => isSem(w) ? `${semName(k)} ${w - C.semesterStart + 1}주차` : `${vacName(k)} ${w}주차`;
@@ -884,7 +892,7 @@ function renderPlanner() {
   $('st-hpbar').style.width = clamp(s.hp, 0, 100) + '%';
   $('st-hpbar').style.background = s.hp >= 60 ? 'var(--good)' : s.hp >= 30 ? 'var(--work)' : 'var(--red)';
   $('st-fatigue').style.width = s.fatigue + '%';
-  $('st-sk').innerHTML = `${Math.round(s.skill)} <span class="lvtag">Lv.${lvOf(s.skill)}</span>`;
+  $('st-sk').innerHTML = `${Math.round(s.skill)} <span class="lvtag">${lvText(s.skill)}</span>`;
   $('st-skbar').style.width = clamp(s.skill / C.bands[0][0] * 100, 0, 100) + '%';
   $('st-loan').textContent = won(s.debt);
   $('st-dday').textContent = !s.tuitionPaid ? `학비 마감까지 ${C.deadlineWeek - s.week + 1}주` : sem ? `기말까지 ${C.weeksPerSem - s.week}주` : `개강까지 ${C.semesterStart - s.week}주`;
@@ -1186,6 +1194,7 @@ function renderBill() {
       <li>알바는 <b>시급 10,320원</b>. 야간은 <b>${C.nightMul}배</b>지만 체력이 훨씬 많이 들어요. 주 15시간 넘으면 <b>주휴수당</b>도 나와요.</li>
       <li>매주 생활비 <b>${man(C.living)} 원</b>, 4주마다 <b>월세</b>(집에 따라 다름). 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
       <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요. 잠으로 회복되는 건 하루 <b>${C.hp.sleepCapDaily}시간</b>까지예요.</li>
+      <li>성적은 학기 말 <b>능력치</b>로 정해져요. <b>${C.bands[0][0]}</b> 이상이면 Lv.5(A+/A0)이고, 더 올릴수록 A+가 잘 나와요(<b>${aPlusTop()}</b>에서 A+ 확률 <b>${Math.round(C.aPlus.max * 100)}%</b>).</li>
       <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
       <li>평점 <b>1.75 미만</b>이면 학사경고, <b>${C.warnLimit}회</b>면 제적. 평점 <b>3.5 이상</b>이면 다음 학기 학비 반액, <b>4.0 이상</b>이면 전액 장학금.</li>
     </ul>` : '';
@@ -1228,15 +1237,18 @@ function renderBill() {
 
 /* ========================================================= grades, report & ending */
 function rollGrades() {
-  const b = C.bands[band(S.skill)];
-  return C.subjects[S.sem].map(name => { const g = C.grades[rint(b[1], b[2])]; return { name, g: g[0], p: g[1] }; });
+  const bi = band(S.skill), b = C.bands[bi], pA = aPlusChance(S.skill);
+  return C.subjects[S.sem].map(name => {
+    const g = C.grades[bi === 0 ? (Math.random() < pA ? 0 : 1) : rint(b[1], b[2])];
+    return { name, g: g[0], p: g[1] };
+  });
 }
 function renderGrades() {
   if (!S.grades) { S.grades = rollGrades(); S.gpa = avg(S.grades.map(g => g.p)); }
   S.screen = 'grades';
   save();
   const gs = S.grades;
-  $('grades').innerHTML = `<h2>${semName(S.sem)} 성적표</h2><div style="color:var(--ink-soft);font-size:14px">최종 능력치 ${Math.round(S.skill)} · Lv.${lvOf(S.skill)} · 난이도 ${diffName()}</div>
+  $('grades').innerHTML = `<h2>${semName(S.sem)} 성적표</h2><div style="color:var(--ink-soft);font-size:14px">최종 능력치 ${Math.round(S.skill)} · ${lvText(S.skill)} · 난이도 ${diffName()}</div>
     <table class="gtable">${gs.map((g, i) => `<tr><td>${g.name}</td><td>3학점</td><td><span class="gstamp">${g.g}</span></td></tr>`).join('')}</table>
     <div class="gpa"><span>평점 평균</span><span class="gstamp">${S.gpa.toFixed(2)} / 4.5</span></div>
     <div class="go"><button class="btn primary" id="btn-report" style="visibility:hidden">학기 결산 →</button></div>`;
