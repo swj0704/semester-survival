@@ -226,7 +226,28 @@ button { font-family: inherit; color: inherit; }
 .tuition .paid { color: var(--good); font-weight: 700; }
 
 /* sliders */
-.slider { display: grid; grid-template-columns: 76px 1fr 78px; align-items: center; gap: 10px; padding: 7px 0; }
+.slider { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; grid-template-areas: "lab rng val"; align-items: center; gap: 10px; padding: 7px 0; }
+.slider label { grid-area: lab; }
+.slider input[type=range] { grid-area: rng; min-width: 0; }
+.slider .val { grid-area: val; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--ink-faint); border-radius: 8px; background: var(--paper); overflow: hidden; }
+.stepper button {
+  font: inherit; font-size: 17px; font-weight: 700; line-height: 1; width: 30px; height: 30px; border: 0; cursor: pointer;
+  background: transparent; color: var(--ink); touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.stepper button:hover { background: var(--paper-2); }
+.stepper button:active { background: var(--grid); }
+.stepper button:disabled { color: var(--ink-faint); cursor: default; background: transparent; }
+.stepper input {
+  font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; width: 44px; height: 30px; padding: 0 2px;
+  border: 0; border-inline: 1.5px solid var(--grid); background: transparent; color: var(--ink); -moz-appearance: textfield; appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input:focus { outline: 2px solid var(--pen); outline-offset: -2px; }
+.stepper .unit { font-size: 13px; color: var(--ink-soft); padding: 0 6px 0 2px; }
+@media (max-width: 480px) {
+  .slider { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lab val" "rng rng"; row-gap: 4px; }
+}
 .slider label { font-size: 14px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
 .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .slider output { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -392,10 +413,10 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
       <div class="spine"></div>
       <div class="paper page right">
         <div class="pagehead"><h2>이번 주 계획</h2><span class="sub" id="pl-free"></span></div>
-        <div class="slider"><label><i class="dot" style="background:var(--sleep)"></i>수면</label><input type="range" id="in-sleep" min="4" max="10" step="0.5"><output id="out-sleep"></output></div>
-        <div class="slider"><label><i class="dot" style="background:var(--study)"></i>공부</label><input type="range" id="in-study" min="0" max="100" step="1"><output id="out-study"></output></div>
-        <div class="slider"><label><i class="dot" style="background:var(--work)"></i>주간 알바</label><input type="range" id="in-day" min="0" max="100" step="1"><output id="out-day"></output></div>
-        <div class="slider"><label><i class="dot" style="background:var(--night)"></i>야간 알바</label><input type="range" id="in-night" min="0" max="100" step="1"><output id="out-night"></output></div>
+        <div class="slider"><label for="num-sleep"><i class="dot" style="background:var(--sleep)"></i>수면</label><input type="range" id="in-sleep" min="4" max="10" step="0.5" aria-label="수면 시간"><div class="val"><div class="stepper"><button type="button" class="stp" data-k="sleep" data-d="-1" aria-label="수면 줄이기">−</button><input type="number" id="num-sleep" min="4" max="10" step="0.5" inputmode="decimal"><span class="unit">h</span><button type="button" class="stp" data-k="sleep" data-d="1" aria-label="수면 늘리기">+</button></div><small id="hint-sleep"></small></div></div>
+        <div class="slider"><label for="num-study"><i class="dot" style="background:var(--study)"></i>공부</label><input type="range" id="in-study" min="0" max="100" step="1" aria-label="공부 시간"><div class="val"><div class="stepper"><button type="button" class="stp" data-k="study" data-d="-1" aria-label="공부 줄이기">−</button><input type="number" id="num-study" min="0" max="100" step="1" inputmode="decimal"><span class="unit">h</span><button type="button" class="stp" data-k="study" data-d="1" aria-label="공부 늘리기">+</button></div></div></div>
+        <div class="slider"><label for="num-day"><i class="dot" style="background:var(--work)"></i>주간 알바</label><input type="range" id="in-day" min="0" max="100" step="1" aria-label="주간 알바 시간"><div class="val"><div class="stepper"><button type="button" class="stp" data-k="day" data-d="-1" aria-label="주간 알바 줄이기">−</button><input type="number" id="num-day" min="0" max="100" step="1" inputmode="decimal"><span class="unit">h</span><button type="button" class="stp" data-k="day" data-d="1" aria-label="주간 알바 늘리기">+</button></div></div></div>
+        <div class="slider"><label for="num-night"><i class="dot" style="background:var(--night)"></i>야간 알바</label><input type="range" id="in-night" min="0" max="100" step="1" aria-label="야간 알바 시간"><div class="val"><div class="stepper"><button type="button" class="stp" data-k="night" data-d="-1" aria-label="야간 알바 줄이기">−</button><input type="number" id="num-night" min="0" max="100" step="1" inputmode="decimal"><span class="unit">h</span><button type="button" class="stp" data-k="night" data-d="1" aria-label="야간 알바 늘리기">+</button></div></div></div>
         <div class="fixedrow"><span>수업 (고정)</span><b id="out-class"></b></div>
         <div class="fixedrow"><span>휴식 (남은 시간 자동)</span><b id="out-rest"></b></div>
         <div class="timebar" id="timebar"></div>
@@ -940,13 +961,10 @@ function renderPlan() {
   const s = S, p = s.plan, sem = isSem(s.week);
   const free = freeHours(s, p.sleep);
   for (const k of ['study', 'day', 'night']) { IN[k].max = free; IN[k].value = p[k]; }
+  syncSteppers(free);
   const capH = C.hp.sleepCapDaily;
-  $('out-sleep').innerHTML = p.sleep > capH
-    ? `${p.sleep.toFixed(1)}h<small style="color:var(--red)">회복은 ${capH}h까지만</small>`
-    : `${p.sleep.toFixed(1)}h<small>하루 · 회복 ${capH}h까지</small>`;
-  $('out-study').textContent = p.study + 'h';
-  $('out-day').textContent = p.day + 'h';
-  $('out-night').textContent = p.night + 'h';
+  $('hint-sleep').textContent = p.sleep > capH ? `회복은 ${capH}h까지만` : `하루 · 회복 ${capH}h까지`;
+  $('hint-sleep').style.color = p.sleep > capH ? 'var(--red)' : '';
   const cls = sem ? C.classHours : 0;
   $('out-class').textContent = sem ? `${cls}h` : '방학 0h';
   const rest = free - p.study - p.day - p.night;
@@ -983,6 +1001,50 @@ function riskAlerts(s, lo, hi, cashAfter) {
 
 IN.sleep.addEventListener('input', () => { S.plan.sleep = +IN.sleep.value; fitPlan('sleep'); renderPlan(); });
 for (const k of ['study', 'day', 'night']) IN[k].addEventListener('input', () => { S.plan[k] = +IN[k].value; fitPlan(k); renderPlan(); });
+
+/* 숫자 입력 + −/+ 버튼 */
+const PLAN_KEYS = ['sleep', 'study', 'day', 'night'];
+const NUM = Object.fromEntries(PLAN_KEYS.map(k => [k, $('num-' + k)]));
+function planLimits(k) {
+  if (k === 'sleep') return { min: 4, max: 10, step: 0.5 };
+  const p = S.plan, free = freeHours(S, p.sleep);
+  const others = ['study', 'day', 'night'].filter(x => x !== k).reduce((a, x) => a + p[x], 0);
+  return { min: 0, max: Math.max(0, free - others), step: 1 };
+}
+function setPlanValue(k, v) {
+  const { min, max, step } = planLimits(k);
+  if (!isFinite(v)) v = S.plan[k];
+  v = Math.round(v / step) * step;
+  S.plan[k] = clamp(v, min, max);
+  if (k === 'sleep') { IN.sleep.value = S.plan.sleep; fitPlan('sleep'); } else fitPlan(k);
+  renderPlan();
+}
+function syncSteppers() {
+  for (const k of PLAN_KEYS) {
+    const el = NUM[k], { min, max } = planLimits(k);
+    el.max = max;
+    if (document.activeElement !== el) el.value = k === 'sleep' ? S.plan.sleep.toFixed(1) : S.plan[k];
+    document.querySelector(`.stp[data-k="${k}"][data-d="-1"]`).disabled = S.plan[k] <= min;
+    document.querySelector(`.stp[data-k="${k}"][data-d="1"]`).disabled = S.plan[k] >= max;
+  }
+}
+for (const k of PLAN_KEYS) {
+  NUM[k].addEventListener('change', () => setPlanValue(k, parseFloat(NUM[k].value)));
+  NUM[k].addEventListener('focus', () => NUM[k].select());
+}
+document.querySelectorAll('.stp').forEach(b => {
+  let timer = null, rep = null;
+  const k = b.dataset.k, d = +b.dataset.d;
+  const step = () => setPlanValue(k, S.plan[k] + d * planLimits(k).step);
+  const stop = () => { clearTimeout(timer); clearInterval(rep); timer = rep = null; };
+  b.addEventListener('pointerdown', e => {
+    if (b.disabled) return;
+    e.preventDefault(); step();
+    timer = setTimeout(() => { rep = setInterval(() => { if (b.disabled) return stop(); step(); }, 70); }, 380);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach(ev => b.addEventListener(ev, stop));
+  b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); step(); } });
+});
 
 /* ========================================================= turn flow */
 let autoLeft = 0, autoLog = [];
@@ -1347,6 +1409,7 @@ $('btn-auto').addEventListener('click', () => { autoLeft = C.autoWeeks; autoLog 
 $('btn-quit').addEventListener('click', () => { save(); $('btn-continue').style.display = ''; show('cover'); });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || $('overlay').classList.contains('on')) return;
+  if (document.activeElement?.matches?.('.stepper input')) { e.preventDefault(); const el = document.activeElement; el.dispatchEvent(new Event('change')); el.blur(); return; }
   if ($('sc-planner').classList.contains('on') && document.activeElement?.tagName !== 'BUTTON') { e.preventDefault(); autoLeft = 0; goWeek(); }
 });
 if (load()) $('btn-continue').style.display = '';
