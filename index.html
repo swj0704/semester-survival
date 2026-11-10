@@ -939,7 +939,10 @@ function renderPlan() {
   const s = S, p = s.plan, sem = isSem(s.week);
   const free = freeHours(s, p.sleep);
   for (const k of ['study', 'day', 'night']) { IN[k].max = free; IN[k].value = p[k]; }
-  $('out-sleep').innerHTML = `${p.sleep.toFixed(1)}h<small>하루 · 주 ${p.sleep * 7}h</small>`;
+  const capH = C.hp.sleepCapDaily;
+  $('out-sleep').innerHTML = p.sleep > capH
+    ? `${p.sleep.toFixed(1)}h<small style="color:var(--red)">회복은 ${capH}h까지만</small>`
+    : `${p.sleep.toFixed(1)}h<small>하루 · 회복 ${capH}h까지</small>`;
   $('out-study').textContent = p.study + 'h';
   $('out-day').textContent = p.day + 'h';
   $('out-night').textContent = p.night + 'h';
@@ -1119,7 +1122,7 @@ function renderBill() {
       <li>매주 <b>하루 수면 시간</b>을 정하고 남은 시간을 <b>공부 · 알바 · 휴식</b>에 나눠요.</li>
       <li>알바는 <b>시급 10,320원</b>. 야간은 1.5배, 주 15시간 넘으면 <b>주휴수당</b>도 나와요.</li>
       <li>매주 생활비 <b>${man(C.living)} 원</b>, 4주마다 <b>월세</b>(집에 따라 다름). 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
-      <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요.</li>
+      <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요. 잠으로 회복되는 건 하루 <b>${C.hp.sleepCapDaily}시간</b>까지예요.</li>
       <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
       <li>평점 <b>1.75 미만</b>이면 학사경고, <b>${C.warnLimit}회</b>면 제적. 평점 <b>3.5 이상</b>이면 다음 학기 학비 반액, <b>4.0 이상</b>이면 전액 장학금.</li>
     </ul>` : '';
