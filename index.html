@@ -108,6 +108,8 @@ button { font-family: inherit; color: inherit; }
 .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 .btn.primary { background: var(--pen); color: var(--on-pen); border-color: var(--ink); }
 .btn.small { padding: 6px 12px; font-size: 14px; box-shadow: 2px 2px 0 var(--ink); }
+.mini { font: inherit; font-size: 12px; font-weight: 600; padding: 1px 8px; margin-left: 4px; border: 1.5px solid var(--ink-faint); border-radius: 999px; background: var(--paper); color: var(--ink); cursor: pointer; vertical-align: 1px; }
+.mini:hover { background: var(--paper-2); }
 .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0 var(--ink); }
 .btn.ghost { box-shadow: none; border-style: dashed; }
 
@@ -408,6 +410,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
         <div class="stat"><span class="k">D-day</span><span></span><span class="v" id="st-dday"></span></div>
         <div class="chips" id="pl-chips"></div>
         <div id="pl-tuition"></div>
+        <div id="pl-repay"></div>
         <div class="postit" id="pl-diary"><div class="lbl">지난주 일기</div><div class="txt" id="pl-diary-txt"></div></div>
       </div>
       <div class="spine"></div>
@@ -487,7 +490,9 @@ const C = {
   tuitionInflation: 0.03,    // 학년마다 학비 +3%
   loanCapRate: [1, 1, 1, 1, 1, 1, 1, 1],
   loanMinGpa: 2.0,           // 직전 학기 평점이 이보다 낮으면 대출 불가
-  loanInterest: 0.01,        // 학기마다 대출 잔액 +1%
+  loanInterest: 0.01,        // 학기 말마다 대출 잔액의 1%를 잔고에서 이자로 냄
+  repayFromSem: 4,           // 3학년(5학기)부터 의무 상환
+  repayRate: 0.15,           // 매 학기 대출 잔액의 15%를 월세 날(4주마다)에 나눠서 자동 이체
   scholarship: [[4.0, 1.0, '전액'], [3.5, 0.5, '반액']],
   warnGpa: 1.75, warnLimit: 2,
   skillCarry: 0.25,          // 다음 학기로 넘어가는 실력
@@ -541,6 +546,7 @@ const pay = (day, night) => {
 const effTier = hp => C.effTiers.find(t => hp >= t[0])[1];
 const band = sk => C.bands.findIndex(b => sk >= b[0]);
 const lvOf = sk => 5 - band(sk);
+let repayOpen = false; // 대출 미리 갚기 패널
 const aPlusTop = () => Math.round(C.bands[0][0] * (1 + C.aPlus.span));
 const aPlusChance = sk => {
   const lo = C.bands[0][0];
@@ -606,6 +612,7 @@ function newState(diff = 'normal') {
   };
 }
 const livingCost = s => C.living + C.livingPerYear * Math.floor(s.sem / 2) + s.livingExtra;
+const repayNow = s => C.rentWeeks.includes(s.week) && s.repayDue > 0 ? Math.min(s.repayInst || s.repayDue, s.repayDue, s.debt) : 0;
 const rentCost = s => houseRent(s.house in HOUSES ? s.house : 'oneroom') + s.rentExtra;
 const maxHp = s => 100 - s.fatigue;
 
@@ -618,6 +625,8 @@ function startSemester(s, k) {
   s.loanCap = s.loanBlocked ? 0 : Math.floor(s.tuitionDue * C.loanCapRate[k] / 100000) * 100000;
   s.tuitionPaid = s.tuitionDue === 0;
   s.loanThis = 0;
+  s.repayDue = k >= C.repayFromSem && s.debt > 0 ? Math.min(s.debt, Math.ceil(s.debt * C.repayRate / 10000) * 10000) : 0; // 이번 학기 남은 상환금
+  s.repayInst = Math.ceil(s.repayDue / C.rentWeeks.length / 10000) * 10000; // 한 번에 빠지는 금액
   s.skill = Math.round(s.skill * (k === 0 ? 0 : C.skillCarry));
   s.used = []; s.grantApplied = false; s.grades = null; s.gpa = null;
   s.screen = 'bill';
@@ -775,7 +784,8 @@ function compute(s, plan, m, drainMul) {
   if (s.laptopWeeks > 0 && !m._laptopApplied) eff *= 0.8;
   const p = pay(day, night);
   const rent = C.rentWeeks.includes(s.week) ? rentCost(s) : 0;
-  return { day, night, study, cls, sleep, rest, recover, drain, hpEnd, eff, gain: study * eff, pay: p, rent, living: livingCost(s) };
+  const repay = repayNow(s);
+  return { day, night, study, cls, sleep, rest, recover, drain, hpEnd, eff, gain: study * eff, pay: p, rent, repay, living: livingCost(s) };
 }
 
 function forecast(s = S) {
@@ -802,8 +812,9 @@ function settle(m) {
   gain += m.skill;
   if (sem && !out.collapsed && r.study < C.assignmentMin) { gain -= C.assignmentPenalty; s.totals.missedHw++; out.hwMissed = true; }
 
-  const expense = r.living + r.rent + out.hospitalFee;
+  const expense = r.living + r.rent + r.repay + out.hospitalFee;
   s.cash = s.cash + income - expense + m.cash;
+  if (r.repay) { s.debt -= r.repay; s.repayDue = Math.max(0, s.repayDue - r.repay); s.totals.repaid = (s.totals.repaid || 0) + r.repay; }
   s.skill = Math.max(0, s.skill + gain);
   out.income = income; out.expense = expense; out.gain = gain;
 
@@ -894,7 +905,8 @@ function renderPlanner() {
   $('st-fatigue').style.width = s.fatigue + '%';
   $('st-sk').innerHTML = `${Math.round(s.skill)} <span class="lvtag">${lvText(s.skill)}</span>`;
   $('st-skbar').style.width = clamp(s.skill / C.bands[0][0] * 100, 0, 100) + '%';
-  $('st-loan').textContent = won(s.debt);
+  $('st-loan').innerHTML = won(s.debt) + (s.debt > 0 ? ` <button class="mini" id="st-repay" type="button">${repayOpen ? '닫기' : '갚기'}</button>` : '');
+  if (s.debt > 0) $('st-repay').addEventListener('click', () => { repayOpen = !repayOpen; renderPlanner(); });
   $('st-dday').textContent = !s.tuitionPaid ? `학비 마감까지 ${C.deadlineWeek - s.week + 1}주` : sem ? `기말까지 ${C.weeksPerSem - s.week}주` : `개강까지 ${C.semesterStart - s.week}주`;
 
   const chips = [];
@@ -903,6 +915,8 @@ function renderPlanner() {
   const nextRent = C.rentWeeks.find(w => w >= s.week);
   if (nextRent === s.week) chips.push(['warn', `이번 주 월세 −${man(rentCost(s))}`]);
   else if (nextRent) chips.push(['info', `다음 월세 W${nextRent}`]);
+  if (repayNow(s)) chips.push(['warn', `이번 주 대출 상환 −${man(repayNow(s))}`]);
+  else if (s.repayDue > 0 && nextRent) chips.push(['info', `다음 대출 상환 W${nextRent} · ${man(Math.min(s.repayInst || s.repayDue, s.repayDue))}`]);
   if (s.overdue > 0) chips.push(['warn', `연체 ${s.overdue}주째 (${C.overdueLimit}주면 휴학)`]);
   if (s.warnings > 0) chips.push(['warn', `학사경고 ${s.warnings}회 (${C.warnLimit}회면 제적)`]);
   if (s.fatigue > 0) chips.push(['warn', `피로 누적 · 최대 체력 ${maxHp(s)}`]);
@@ -917,12 +931,39 @@ function renderPlanner() {
   $('pl-chips').innerHTML = chips.map(([c, t]) => `<span class="chip ${c}">${t}</span>`).join('');
 
   renderTuition();
+  renderRepay();
   $('pl-diary').style.display = s.diary ? '' : 'none';
   $('pl-diary-txt').textContent = s.diary;
   IN.sleep.value = s.plan.sleep;
   renderPlan();
 }
 
+function renderRepay() {
+  const s = S, box = $('pl-repay');
+  if (!repayOpen || s.debt <= 0) { box.innerHTML = ''; return; }
+  const max = Math.max(0, Math.min(s.debt, Math.floor(s.cash / 10000) * 10000));
+  const step = 10000;
+  box.innerHTML = `<div class="tuition">
+    <h3><span>대출 미리 갚기</span><span style="font-size:13px;color:var(--ink-soft);font-weight:400">잔액 ${won(s.debt)}</span></h3>
+    <div class="row" style="color:var(--ink-soft);font-size:12.5px"><span>갚은 만큼 이자가 줄고${s.repayDue > 0 ? ', 이번 학기 남은 상환금에서도 빠져요' : '요'}</span></div>
+    <div class="row"><span>갚을 금액</span><b id="rp-amt"></b></div>
+    <input type="range" id="rp-range" min="0" max="${max}" step="${step}" value="${Math.min(max, Math.max(0, s.repayDue || 0) || max)}" aria-label="미리 갚을 금액" ${max === 0 ? 'disabled' : ''}>
+    <div class="row"><span>갚은 뒤 잔고</span><b id="rp-cash"></b></div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn small" id="rp-pay">갚기</button></div>
+  </div>`;
+  const rg = $('rp-range');
+  const upd = () => { const a = +rg.value; $('rp-amt').textContent = won(a); $('rp-cash').textContent = won(s.cash - a); $('rp-pay').disabled = a <= 0; };
+  rg.addEventListener('input', upd);
+  $('rp-pay').addEventListener('click', () => {
+    const a = Math.min(+rg.value, s.debt, Math.max(0, s.cash));
+    if (a <= 0) return;
+    s.cash -= a; s.debt -= a; s.totals.repaid = (s.totals.repaid || 0) + a;
+    if (s.repayDue > 0) s.repayDue = Math.max(0, s.repayDue - a);
+    if (s.debt <= 0) repayOpen = false;
+    save(); renderPlanner();
+  });
+  upd();
+}
 function renderTuition() {
   const s = S, box = $('pl-tuition');
   if (s.week > C.deadlineWeek) { box.innerHTML = ''; return; }
@@ -983,7 +1024,7 @@ function renderPlan() {
 
   const { lo, hi } = forecast();
   const dHpLo = Math.round(hi.hpEnd - s.hp), dHpHi = Math.round(lo.hpEnd - s.hp);
-  const inc = lo.pay.total, exp = lo.living + lo.rent, cashAfter = s.cash + inc - exp;
+  const inc = lo.pay.total, exp = lo.living + lo.rent + lo.repay, cashAfter = s.cash + inc - exp;
   const alerts = riskAlerts(s, lo, hi, cashAfter);
   const fatNote = p.sleep < C.fatigue.under ? `<div class="alert">수면 ${C.fatigue.under}시간 미만 · 피로 누적 +${Math.round((C.fatigue.under - p.sleep) * C.fatigue.perHour)}</div>` : '';
   const rng = dHpLo === dHpHi ? signed(dHpLo) : `${signed(dHpLo)} ~ ${signed(dHpHi)}`;
@@ -991,7 +1032,7 @@ function renderPlan() {
       <div><span>체력</span><b>${rng}</b></div>
       <div><span>능력치</span><b>+${Math.round(lo.gain)}</b></div>
       <div><span>알바 수입</span><b class="pos">+${man(inc)}</b></div>
-      <div><span>생활비${lo.rent ? '+월세' : ''}</span><b class="neg">−${man(exp)}</b></div>
+      <div><span>생활비${lo.rent ? '+월세' : ''}${lo.repay ? '+상환' : ''}</span><b class="neg">−${man(exp)}</b></div>
       <div><span>정산 후 잔고</span><b class="${cashAfter < 0 ? 'neg' : ''}">${man(cashAfter)}</b></div>
       <div><span>공부 효율</span><b>×${lo.eff.toFixed(2)}</b></div>
     </div>${alerts.map(a => `<div class="alert">${a}</div>`).join(' ')}${fatNote}
@@ -1091,7 +1132,7 @@ function finishWeek(m) {
     if (!stop) {
       advanceWeek();
       const { lo, hi } = forecast();
-      const cashAfter = S.cash + lo.pay.total - lo.living - lo.rent;
+      const cashAfter = S.cash + lo.pay.total - lo.living - lo.rent - lo.repay;
       const risky = riskAlerts(S, lo, hi, cashAfter).length > 0 || (S.week <= C.deadlineWeek && !S.tuitionPaid);
       if (!risky) { save(); renderPlanner(); show('planner'); setTimeout(goWeek, 120); return; }
       // 다음 주가 위험하면 여기서 멈추고 요약을 보여 준 뒤 플래너로
@@ -1126,6 +1167,7 @@ function receiptBody(o) {
   }
   h += L('생활비', '−' + won(r.living), 'neg');
   if (r.rent) h += L('월세·관리비', '−' + won(r.rent), 'neg');
+  if (r.repay) h += L('학자금 대출 상환', '−' + won(r.repay), 'neg');
   if (o.hospitalFee) h += L('병원비', '−' + won(o.hospitalFee), 'neg');
   if (o.m.cash) h += L(o.m.event || '이벤트', (o.m.cash > 0 ? '+' : '−') + won(Math.abs(o.m.cash)), o.m.cash > 0 ? 'pos' : 'neg');
   return h;
@@ -1195,7 +1237,7 @@ function renderBill() {
       <li>매주 생활비 <b>${man(C.living)} 원</b>, 4주마다 <b>월세</b>(집에 따라 다름). 잔고 마이너스가 <b>3주 연속</b>이면 휴학.</li>
       <li>체력이 0 이하가 되면 그 주는 <b>쓰러져서 무효</b>. 하루 <b>6시간 미만</b>으로 자면 피로가 쌓여 최대 체력이 줄어요. 잠으로 회복되는 건 하루 <b>${C.hp.sleepCapDaily}시간</b>까지예요.</li>
       <li>성적은 학기 말 <b>능력치</b>로 정해져요. <b>${C.bands[0][0]}</b> 이상이면 Lv.5(A+/A0)이고, 더 올릴수록 A+가 잘 나와요(<b>${aPlusTop()}</b>에서 A+ 확률 <b>${Math.round(C.aPlus.max * 100)}%</b>).</li>
-      <li>학자금 대출은 <b>학비 전액</b>까지, 학기마다 이자 <b>1%</b>. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
+      <li>학자금 대출은 <b>학비 전액</b>까지. 학기 말마다 이자 <b>${Math.round(C.loanInterest * 100)}%</b>가 잔고에서 빠지고, <b>3학년</b>부터는 매 학기 잔액의 <b>${Math.round(C.repayRate * 100)}%</b>를 월세 날마다 나눠 갚아요. 평점 <b>${C.loanMinGpa.toFixed(1)} 미만</b>이면 다음 학기 대출 불가.</li>
       <li>평점 <b>1.75 미만</b>이면 학사경고, <b>${C.warnLimit}회</b>면 제적. 평점 <b>3.5 이상</b>이면 다음 학기 학비 반액, <b>4.0 이상</b>이면 전액 장학금.</li>
     </ul>` : '';
   const hist = s.history.length ? `<div class="semhist">${s.history.map(h => `<span>${h.name} ${h.gpa.toFixed(2)}</span>`).join('')}</div>` : '';
@@ -1204,7 +1246,7 @@ function renderBill() {
     <p class="diaryline">${lines}</p>
     <div class="bill">
       <div><div style="font-size:13px;color:var(--ink-soft)">${semName(k)} 등록금 고지서</div><div class="amt">${won(s.tuitionDue)}</div>${schol}</div>
-      <div style="text-align:right;font-size:14px">납부 마감 <b style="color:var(--red)">W3 종료</b><br><span style="color:var(--ink-soft)">${loanLine}</span></div>
+      <div style="text-align:right;font-size:14px">납부 마감 <b style="color:var(--red)">W3 종료</b><br><span style="color:var(--ink-soft)">${loanLine}</span>${s.repayDue ? `<br><span style="color:var(--red)">이번 학기 대출 상환 ${won(s.repayDue)} · 월세 날마다 ${man(s.repayInst)}씩</span>` : ''}</div>
     </div>
     <div class="house-title" id="house-title"></div>
     <div class="houses" id="houses" role="radiogroup" aria-label="집 고르기"></div>
@@ -1271,7 +1313,7 @@ function closeSemester() {
   if (sc) s.totals.scholarships++;
   s.loanBlocked = s.gpa < C.loanMinGpa; res.blocked = s.loanBlocked;
   res.interest = Math.round(s.debt * C.loanInterest);
-  s.debt += res.interest;
+  s.cash -= res.interest;
   if (s.warnings >= C.warnLimit) s.over = 'academic';
   s._closed = s.sem; s._closeResult = res;
   return res;
@@ -1296,7 +1338,7 @@ function renderReport() {
   if (res.warned) h += v('bad', `학사경고 ${s.warnings}회째`, `평점 ${C.warnGpa} 미만이에요. ${C.warnLimit}회가 되면 제적이에요.`);
   if (!last && res.schol) h += v('good', `성적장학금 ${res.schol === 1 ? '전액' : '반액'}!`, '다음 학기 학비에서 빠져요.');
   if (!last && res.blocked) h += v('bad', '다음 학기 학자금 대출 불가', `평점 ${C.loanMinGpa} 미만이라 다음 학기 학비는 전부 내 돈으로 내야 해요.`);
-  if (res.interest) h += `<div style="font-size:13px;color:var(--ink-soft);margin-top:6px">대출 이자 ${won(res.interest)}가 붙었어요.</div>`;
+  if (res.interest) h += `<div style="font-size:13px;color:var(--ink-soft);margin-top:6px">대출 이자 ${won(res.interest)}가 잔고에서 빠졌어요.</div>`;
   const btn = s.over ? '결과 보기' : last ? '졸업식으로 →' : `${semName(s.sem + 1)} 준비 →`;
   h += `<div class="go"><button class="btn primary" id="btn-semnext">${btn}</button></div>`;
   $('report').innerHTML = h;
